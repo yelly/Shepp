@@ -72,11 +72,11 @@ class Lexer:
             input (str): A string to lex.
 
         Returns:
-            list[LexTokens]: A list of lexed tokens.
+            generator[LexTokens]: A generator of lexed tokens.
         """
 
         self.set_input(input)
-        return [tok for tok in self.lex_tokens()]
+        return self.lex_tokens()
 
     def lex_file(self, path):
         """Lex the contents of a file.
@@ -85,7 +85,7 @@ class Lexer:
             path (str): The path of the file to lex.
 
         Returns:
-            list[LexTokens]: A list of the tokens lexed from the file.
+            generator[LexTokens]: A generator of the tokens lexed from the file.
         """
 
         with open(path, 'rt') as f:

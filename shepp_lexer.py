@@ -17,7 +17,19 @@ class SheppLexer(lexer.Lexer):
 
     tokens = ('WS', 'WORD', 'PPID') + tuple(PP_RESERVED.values())
 
+    literals = ['\\']
+
     t_WORD = r'[\w-]+'
+
+    def __init__(self, **kwargs):
+        """Initialize the lexer.
+
+        All arguments are passed as is to lex.lex.
+        """
+
+        super().__init__(**kwargs)
+
+        self._pp_escape = False
 
     @TOKEN(r'\s+')
     def t_WS(self, t):
@@ -44,18 +56,22 @@ class SheppLexer(lexer.Lexer):
 
         self._lexer.push_state('pp')
 
-    @TOKEN(r'\s+')
+    @TOKEN(r'\s')
     def t_pp_WS(self, t):
         """A whitespace token in PreProcessor state.
 
-        Can include any number of whitespace charachters.
-        If a newline is encountered, ends PreProcessor state.
+        If an unescaped newline is encountered, ends PreProcessor state.
         """
 
-        if '\n' in t.value:
-            self._lexer.pop_state()
-            self._lexer.lineno += t.value.count('\n')
-            t.value = '\n'
+        pp_escape = self._pp_escape
+        self._pp_escape = False
+
+        if t.value == '\n':
+            self._lexer.lineno += 1
+
+            if not pp_escape:
+                self._lexer.pop_state()
+
             return t
 
     @TOKEN(r'\w+')
@@ -63,5 +79,15 @@ class SheppLexer(lexer.Lexer):
         """PrePrecessor identifiers."""
 
         t.type = type(self).PP_RESERVED.get(t.value, 'PPID')
+        self._pp_escape = False
+
+        return t
+
+    @TOKEN(r'\\')
+    def t_pp_fslash(self, t):
+        """Escape charachter in preprocessor block."""
+
+        t.type = '\\'
+        self._pp_escape = True
 
         return t

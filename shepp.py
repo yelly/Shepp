@@ -9,8 +9,6 @@ class Shepp:
     """A SHEll PrePrcessor for POSIX shell scripts."""
 
     def __init__(self):
-        self._lexer = shepp_lexer.SheppLexer()
-
         self._macros = {}
 
         dt = datetime.datetime.now()
@@ -28,34 +26,84 @@ class Shepp:
         self._macros[name] = value
 
     def preprocess(self, input):
-        """Preprocess a Shepp script.
+        """Preprocess a Shepp script and print the result.
+
+        Args:
+            input (str): A Shepp script.
+        """
+
+        for tok in self._lex_preprocess(input):
+            print(tok.value, end='')
+
+    def _join_lines(self, tokens):
+        """Joins lines after an escaped newline.
+
+        Args:
+            tokens (generator[LexTokens]): The stream of tokens to handle.
+
+        Yields:
+            LexTokens: The next token (with escaped newlines removed).
+        """
+
+        for tok in tokens:
+            if tok.type == '\\':
+                next_tok = next(tokens)
+
+                if next_tok.type == 'WS' and next_tok.value[0] == '\n':
+                    if len(next_tok.value) > 1:
+                        next_tok.value = next_tok.value[1:]
+                        yield next_tok
+                else:
+                    yield tok
+                    yield next_tok
+
+                continue
+
+            yield tok
+
+    def _lex_preprocess(self, input):
+        """Preprocess a Shepp script and yield lexed tokens.
 
         Args:
             input (str): A Shepp script.
 
-        Returns:
-            str: A preprocessed POSIX shell script.
+        Yields:
+            LexTokens: The next preprocessed token.
         """
 
-        toks = self._lexer.lex(input)
+        lexer = shepp_lexer.SheppLexer()
 
-        i = 0
-        while i < len(toks):
-            tok = toks[i]
+        tokens = self._join_lines(lexer.lex(input))
 
+        for tok in tokens:
             if tok.type == 'DEFINE':
-                if not (toks[i + 1].type == 'PPID' and
-                        toks[i + 2].type == 'PPID' and
-                        toks[i + 3].type == 'WS'):
-                    raise Exception('Bad define.')  # TODO: improve.
-
-                toks.pop(i)
-                self.define(toks.pop(i).value, toks.pop(i).value)
+                self._handle_define(tokens)
+                continue
             elif tok.type == 'WORD':
                 if tok.value in self._macros:
                     tok.value = self._macros[tok.value]
 
-            i += 1
+            yield tok
 
-        for tok in toks:
-            print(tok.value, end='')
+    def _handle_define(self, tokens):
+        """Handle a define statement.
+
+        Handle a define statement by consuming the relevant tokens from the stream.
+        Should only be called after a DEFINE token has been consumed.
+
+        Args:
+            tokens (generator[LexTokens]): The stream of tokens being handled.
+        """
+
+        name = next(tokens)
+        if name.type != 'PPID':
+            raise Exception('Bad define.')  # TODO: improve.
+
+        value = next(tokens)
+        if value.type != 'PPID':
+            raise Exception('Bad define.')  # TODO: improve.
+
+        self.define(name.value, value.value)
+
+        if next(tokens).type != 'WS':
+            raise Exception('Bad define.')  # TODO: improve.
