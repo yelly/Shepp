@@ -9,6 +9,7 @@ class Shepp:
     """A SHEll PrePrcessor for POSIX shell scripts."""
 
     def __init__(self):
+        self.path = ['.']
         self._macros = {}
 
         dt = datetime.datetime.now()
@@ -76,6 +77,8 @@ class Shepp:
         tokens = self._join_lines(lexer.lex(input))
 
         for tok in tokens:
+            if tok.type == 'COMMENT':
+                continue
             if tok.type == 'DEFINE':
                 self._handle_define(tokens)
                 continue
@@ -96,14 +99,30 @@ class Shepp:
         """
 
         name = next(tokens)
-        if name.type != 'PPID':
+        if name.type != 'PP_WORD':
             raise Exception('Bad define.')  # TODO: improve.
 
         value = next(tokens)
-        if value.type != 'PPID':
+        if value.type != 'PP_WORD':
             raise Exception('Bad define.')  # TODO: improve.
 
         self.define(name.value, value.value)
 
         if next(tokens).type != 'WS':
             raise Exception('Bad define.')  # TODO: improve.
+
+    def _handle_include(self, tokens):
+        """Handle an include statement.
+
+        Handle an include statement by consuming the relevant tokens from the stream and yielding
+        the tokens from the included file.
+        Should only be called after an INCLUDE token has been consumed.
+
+        Args:
+            tokens (generator[LexTokens]): The stream of tokens being handled.
+
+        Yields:
+            LexTokens: The next token from the included file.
+        """
+
+        pass

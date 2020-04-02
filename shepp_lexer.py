@@ -15,11 +15,12 @@ class SheppLexer(lexer.Lexer):
         'define': 'DEFINE',
     }
 
-    tokens = ('WS', 'WORD', 'PPID') + tuple(PP_RESERVED.values())
+    tokens = ('WS', 'WORD', 'COMMENT', 'PP_WORD') + tuple(PP_RESERVED.values())
 
     literals = ['\\']
 
     t_WORD = r'[\w-]+'
+    t_COMMENT = r'\#.*\n'
 
     def __init__(self, **kwargs):
         """Initialize the lexer.
@@ -74,11 +75,11 @@ class SheppLexer(lexer.Lexer):
 
             return t
 
-    @TOKEN(r'\w+')
-    def t_pp_PPID(self, t):
-        """PrePrecessor identifiers."""
+    @TOKEN(r'(\w+)|("[^\n]*")')
+    def t_pp_PP_WORD(self, t):
+        """PrePrecessor identifiers and strings."""
 
-        t.type = type(self).PP_RESERVED.get(t.value, 'PPID')
+        t.type = type(self).PP_RESERVED.get(t.value, 'PP_WORD')
         self._pp_escape = False
 
         return t
