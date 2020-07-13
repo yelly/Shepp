@@ -1,15 +1,19 @@
 """A useful ply lexer class."""
 
+from pathlib import Path
+from typing import *
+
 from ply import lex
+from ply.lex import LexToken
 
 
 class LexingError(Exception):
     """An exception raised when an error is encountered during lexing."""
 
-    def __init__(self, token):
+    def __init__(self, token: LexToken):
         """
         Args:
-            token (LexTokens): The token which caused the error.
+            token: The token which caused the error.
         """
 
         super().__init__()
@@ -17,12 +21,12 @@ class LexingError(Exception):
         self._token = token
 
     @property
-    def token(self):
-        """The token which caused the error (LexTokens)."""
+    def token(self) -> LexToken:
+        """The token which caused the error."""
 
         return self._token
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'Unrecognised character {self.token.value[0]} encountered at position {self.token.lexpos} on line {self.token.lineno}.'
 
 
@@ -37,25 +41,25 @@ class Lexer:
 
         self._lexer = lex.lex(module=self, **kwargs)
 
-    def t_ANY_error(self, t):
+    def t_ANY_error(self, t: LexToken):
         """General error handling."""
 
         raise LexingError(t)
 
-    def set_input(self, input):
+    def set_input(self, input: str):
         """Sets the lexer input.
 
         Args:
-            input (str): The input to the lexer.
+            input: The input to the lexer.
         """
 
         self._lexer.input(input)
 
-    def lex_tokens(self):
+    def lex_tokens(self) -> Iterator[LexToken]:
         """A generator that yields tokens parsed from the input.
 
         Yields:
-            LexTokens: The next token lexed from the input.
+            The next token lexed from the input.
         """
 
         while True:
@@ -65,27 +69,27 @@ class Lexer:
 
             yield tok
 
-    def lex(self, input):
+    def lex(self, input: str) -> Iterator[LexToken]:
         """Lex an input string.
 
         Args:
-            input (str): A string to lex.
+            input: A string to lex.
 
         Returns:
-            generator[LexTokens]: A generator of lexed tokens.
+            A generator of lexed tokens.
         """
 
         self.set_input(input)
         return self.lex_tokens()
 
-    def lex_file(self, path):
+    def lex_file(self, path: Path) -> Iterator[LexToken]:
         """Lex the contents of a file.
 
         Args:
-            path (str): The path of the file to lex.
+            path: The path of the file to lex.
 
         Returns:
-            generator[LexTokens]: A generator of the tokens lexed from the file.
+            A generator of the tokens lexed from the file.
         """
 
         with open(path, 'rt') as f:
