@@ -82,6 +82,9 @@ class SheppLexer(lexer.Lexer):
         t.type = type(self).PP_RESERVED.get(t.value, 'PP_WORD')
         self._pp_escape = False
 
+        if t.value[0] == t.value[-1] and t.value[0] in ("'", '"'):
+            t.value = t.value[1:-1]
+
         return t
 
     @TOKEN(r'\\')

@@ -85,6 +85,9 @@ class Shepp:
             if tok.type == 'DEFINE':
                 self._handle_define(tokens)
                 continue
+            elif tok.type == 'INCLUDE':
+                yield from self._handle_include(tokens)
+                continue
             elif tok.type == 'WORD':
                 if tok.value in self._macros:
                     tok.value = self._macros[tok.value]
@@ -114,7 +117,7 @@ class Shepp:
         if next(tokens).type != 'WS':
             raise Exception('Bad define.')  # TODO: improve.
 
-    def _handle_include(self, tokens: Iterable[LexToken]) -> LexToken:
+    def _handle_include(self, tokens: Iterable[LexToken]) -> Iterable[LexToken]:
         """Handle an include statement.
 
         Handle an include statement by consuming the relevant tokens from the stream and yielding
@@ -128,7 +131,24 @@ class Shepp:
             The next token from the included file.
         """
 
-        pass
+        include_tok = next(tokens)
+        if include_tok.type != 'PP_WORD':
+            raise Exception('Bad include.')  # TODO: improve.
+
+        include_name = Path(include_tok.value)
+
+        for path in self.path:
+            include_file = path / include_name
+
+            if include_file.is_file():
+                break
+        else:
+            raise Exception('Include file not found')  # TODO: improve.
+
+        with open(include_file, 'rt') as f:
+            input = f.read()
+
+        yield from self._lex_preprocess(input)
 
 
 def main(infile: Optional[Path]=None, outfile: Optional[Path]=None, path: Optional[Iterable[Path]]=None):
