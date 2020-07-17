@@ -9,7 +9,6 @@ from ply.lex import LexToken
 
 class LexingError(Exception):
     """An exception raised when an error is encountered during lexing."""
-
     def __init__(self, token: LexToken):
         """
         Args:
@@ -32,7 +31,6 @@ class LexingError(Exception):
 
 class Lexer:
     """A useful ply lexer class."""
-
     def __init__(self, **kwargs):
         """Initialize the lexer.
 

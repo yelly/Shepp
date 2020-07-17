@@ -8,19 +8,20 @@ import lexer
 class SheppLexer(lexer.Lexer):
     """A lexer for POSIX shells to be used with the SHEll PreProcessor."""
 
-    states = (('pp', 'exclusive'),)
+    states = (('pp', 'exclusive'), ('escaped', 'exclusive'))
 
     PP_RESERVED = {
         'include': 'INCLUDE',
         'define': 'DEFINE',
     }
 
-    tokens = ('WS', 'WORD', 'COMMENT', 'PP_WORD') + tuple(PP_RESERVED.values())
+    tokens = ('WS', 'WORD', 'CHAR', 'COMMENT', 'PP_WORD') + tuple(
+        PP_RESERVED.values())
 
     literals = ['\\']
 
     t_WORD = r'[\w-]+'
-    t_COMMENT = r'\#.*\n'
+    t_ignore_COMMENT = r'[#].*\n'
 
     def __init__(self, **kwargs):
         """Initialize the lexer.
@@ -51,7 +52,21 @@ class SheppLexer(lexer.Lexer):
 
         return t
 
-    @TOKEN(r'\#\$')
+    @TOKEN(r'\\')
+    def t_ANY_begin_escaped(self, t):
+        """Entering the escaped state."""
+
+        self._lexer.push_state('escaped')
+
+    @TOKEN(r'["\'\n]')
+    def t_escaped_CHAR(self, t):
+        """An escaped charachter."""
+
+        self._lexer.pop_state()
+
+        return t
+
+    @TOKEN(r'[#]\$')
     def t_begin_pp(self, t):
         """Entering the PreProcessor state."""
 

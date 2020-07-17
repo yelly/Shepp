@@ -5,7 +5,7 @@ import argparse
 import datetime
 from pathlib import Path
 import sys
-from typing import *
+from typing import Optional, Iterator, Iterable, List, Dict
 
 from ply.lex import LexToken
 
@@ -14,17 +14,16 @@ import shepp_lexer
 
 class Shepp:
     """A SHEll PrePrcessor for POSIX shell scripts."""
-
-    def __init__(self, path: Optional[Iterable[Path]]=None):
+    def __init__(self, path: Optional[Iterable[Path]] = None):
         self.path: List[Path] = [Path('.')]
         self._macros: Dict[str, str] = {}
 
         if path:
             self.path.extend(path)
 
-        dt = datetime.datetime.now()
-        self.define('__DATE__', f'{dt:%b} {dt:%d} {dt:%y}')
-        self.define('__TIME__', f'{dt:%H}:{dt:%M}:{dt:%S}')
+        date = datetime.datetime.now()
+        self.define('__DATE__', f'{date:%b} {date:%d} {date:%y}')
+        self.define('__TIME__', f'{date:%H}:{date:%M}:{date:%S}')
 
     def define(self, name: str, value: str):
         """Define a macro.
@@ -36,20 +35,22 @@ class Shepp:
 
         self._macros[name] = value
 
-    def preprocess(self, input: str) -> Iterator[str]:
+    def preprocess(self, script: str) -> Iterator[str]:
         """Preprocess a Shepp script and yield the result.
 
         Args:
-            input: A Shepp script.
+            script: A Shepp script.
 
         Yields:
             Processed tokens.
         """
 
-        for tok in self._lex_preprocess(input):
+        for tok in type(self)._remove_empty_lines(
+                self._lex_preprocess(script)):
             yield tok.value
 
-    def _join_lines(self, tokens: Iterable[LexToken]) -> Iterator[LexToken]:
+    @staticmethod
+    def _join_lines(tokens: Iterable[LexToken]) -> Iterator[LexToken]:
         """Joins lines after an escaped newline.
 
         Args:
@@ -60,16 +61,41 @@ class Shepp:
         """
 
         for tok in tokens:
-            if tok.type == 'CHAR' and tok.value == '\\\n':
+            if tok.type == 'CHAR' and tok.value == '\n':
                 continue
 
             yield tok
 
-    def _lex_preprocess(self, input: str) -> Iterator[LexToken]:
+    @staticmethod
+    def _remove_empty_lines(tokens: Iterable[LexToken]) -> Iterator[LexToken]:
+        """Removes empty lines from a token stream.
+
+        Args:
+            tokens: The stream of tokens to handle.
+
+        Yields:
+            The next token (with empty newlines removed).
+        """
+
+        last_newline = False
+
+        for tok in tokens:
+            if tok.type == 'WS' and '\n' in tok.value:
+                tok.value = '\n'
+
+                if not last_newline:
+                    yield tok
+
+                last_newline = True
+            else:
+                yield tok
+                last_newline = False
+
+    def _lex_preprocess(self, script: str) -> Iterator[LexToken]:
         """Preprocess a Shepp script and yield lexed tokens.
 
         Args:
-            input: A Shepp script.
+            script: A Shepp script.
 
         Yields:
             The next preprocessed token.
@@ -77,18 +103,18 @@ class Shepp:
 
         lexer = shepp_lexer.SheppLexer()
 
-        tokens = self._join_lines(lexer.lex(input))
+        tokens = type(self)._join_lines(lexer.lex(script))
 
         for tok in tokens:
-            if tok.type == 'COMMENT':
-                continue
             if tok.type == 'DEFINE':
                 self._handle_define(tokens)
                 continue
-            elif tok.type == 'INCLUDE':
+
+            if tok.type == 'INCLUDE':
                 yield from self._handle_include(tokens)
                 continue
-            elif tok.type == 'WORD':
+
+            if tok.type == 'WORD':
                 if tok.value in self._macros:
                     tok.value = self._macros[tok.value]
 
@@ -117,7 +143,8 @@ class Shepp:
         if next(tokens).type != 'WS':
             raise Exception('Bad define.')  # TODO: improve.
 
-    def _handle_include(self, tokens: Iterable[LexToken]) -> Iterable[LexToken]:
+    def _handle_include(self,
+                        tokens: Iterator[LexToken]) -> Iterator[LexToken]:
         """Handle an include statement.
 
         Handle an include statement by consuming the relevant tokens from the stream and yielding
@@ -131,7 +158,11 @@ class Shepp:
             The next token from the included file.
         """
 
-        include_tok = next(tokens)
+        try:
+            include_tok = next(tokens)
+        except StopIteration:
+            raise Exception('Bad include.')  # TODO: improve
+
         if include_tok.type != 'PP_WORD':
             raise Exception('Bad include.')  # TODO: improve.
 
@@ -145,13 +176,15 @@ class Shepp:
         else:
             raise Exception('Include file not found')  # TODO: improve.
 
-        with open(include_file, 'rt') as f:
-            input = f.read()
+        with open(include_file, 'rt') as file:
+            script = file.read()
 
-        yield from self._lex_preprocess(input)
+        yield from self._lex_preprocess(script)
 
 
-def main(infile: Optional[Path]=None, outfile: Optional[Path]=None, path: Optional[Iterable[Path]]=None):
+def main(infile: Optional[Path] = None,
+         outfile: Optional[Path] = None,
+         path: Optional[Iterable[Path]] = None):
     """Preprocess a POSIX shell script.
 
     Args:
@@ -161,15 +194,15 @@ def main(infile: Optional[Path]=None, outfile: Optional[Path]=None, path: Option
     """
 
     if infile:
-        with open(infile, 'rt') as f:
-            input = f.read()
+        with open(infile, 'rt') as file:
+            script = file.read()
     else:
-        input = sys.stdin.read()
+        script = sys.stdin.read()
 
     out = open(outfile, 'wt') if outfile else sys.stdout
 
     try:
-        for tok in Shepp(path=path).preprocess(input):
+        for tok in Shepp(path=path).preprocess(script):
             out.write(tok)
     finally:
         if outfile:
@@ -177,10 +210,23 @@ def main(infile: Optional[Path]=None, outfile: Optional[Path]=None, path: Option
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='SHEPP - A SHEll PreProcessor for POSIX scripts.')
-    parser.add_argument('-i', '--infile', type=Path, nargs='?', help='The path of a file to process, defaults to stdin')
-    parser.add_argument('-o', '--outfile', type=Path, nargs='?', help='The output path, defaults to stdout')
-    parser.add_argument('-I', '--include', type=Path, action='append', help='A directory to search for includes')
+    parser = argparse.ArgumentParser(
+        description='SHEPP - A SHEll PreProcessor for POSIX scripts.')
+    parser.add_argument('-i',
+                        '--infile',
+                        type=Path,
+                        nargs='?',
+                        help='The input path, defaults to stdin')
+    parser.add_argument('-o',
+                        '--outfile',
+                        type=Path,
+                        nargs='?',
+                        help='The output path, defaults to stdout')
+    parser.add_argument('-I',
+                        '--include',
+                        type=Path,
+                        action='append',
+                        help='A directory to search for includes')
 
     args = parser.parse_args()
     main(args.infile, args.outfile, args.include)
